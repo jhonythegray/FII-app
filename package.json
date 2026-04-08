@@ -1,5 +1,5 @@
 {
-  "name": "fii-app-saas-premium",
+  "name": "fii-app-secure",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -8,9 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "latest",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
+    "next": "^14.2.15",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "recharts": "^2.10.0"
   }
 }
