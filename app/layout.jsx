@@ -1,12 +1,9 @@
-export const metadata = {
-  title: "FII App",
-  description: "Gestão de FIIs"
-};
+import './globals.css'
 
 export default function RootLayout({ children }) {
   return (
     <html lang="pt-br">
       <body>{children}</body>
     </html>
-  );
+  )
 }

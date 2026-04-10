@@ -1,5 +1,5 @@
 {
-  "name": "fii-app-final",
+  "name": "fii-saas-full",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -11,6 +11,9 @@
     "next": "^14.2.15",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.10.0"
+    "recharts": "^2.10.0",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
   }
 }
