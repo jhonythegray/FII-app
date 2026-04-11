@@ -4,6 +4,11 @@ import { PieChart, Pie, Cell, Tooltip } from "recharts";
 
 const COLORS = ["#6366f1","#22c55e","#f59e0b","#ef4444"];
 
+const FII_LIST = [
+  "HGLG11","XPLG11","BTLG11","XPML11","KNRI11",
+  "VISC11","HSML11","MALL11","GGRC11","BRCO11"
+];
+
 export default function Page(){
 
   const [portfolio,setPortfolio]=useState([])
@@ -12,6 +17,18 @@ export default function Page(){
   const [ticker,setTicker]=useState("")
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState(null)
+
+  // 💾 persistência
+  useEffect(()=>{
+    const saved = localStorage.getItem("fii_app")
+    if(saved){
+      setPortfolio(JSON.parse(saved))
+    }
+  },[])
+
+  useEffect(()=>{
+    localStorage.setItem("fii_app", JSON.stringify(portfolio))
+  },[portfolio])
 
   const addFII = ()=>{
     if(!ticker) return
@@ -56,6 +73,7 @@ export default function Page(){
 
   const total = enriched.reduce((a,b)=>a+b.value,0)
 
+  // 🧠 IA melhorada
   const scored = enriched.map(f=>{
     let score = 0
 
@@ -64,7 +82,9 @@ export default function Page(){
 
     const weight = total>0 ? f.value/total : 0
     if(weight<0.2) score += 2
-    else score -= 1
+    else score -= 2
+
+    if(portfolio.length < 5) score += 1
 
     return {...f,score}
   })
@@ -76,8 +96,8 @@ export default function Page(){
       ticker:f.ticker,
       qty: Math.floor((aporte/3)/(f.price||1)),
       reason:[
-        f.price>0 ? "Preço válido" : "Sem preço",
-        f.value<total*0.2 ? "Subalocado" : "Alta concentração"
+        f.value<total*0.2 ? "Subalocado" : "Concentrado",
+        f.price>0 ? "Preço válido" : "Sem preço"
       ]
     }))
 
@@ -88,24 +108,40 @@ export default function Page(){
 
       <h1 className="text-2xl font-bold mb-6">FII App</h1>
 
-      {/* ADD */}
-      <div className="flex gap-2 mb-4">
+      {/* 🔎 AUTOCOMPLETE */}
+      <div className="relative w-full mb-4">
         <input 
           value={ticker}
-          onChange={e=>setTicker(e.target.value)}
-          placeholder="Digite o ticker (ex: HGLG11)"
+          onChange={e=>setTicker(e.target.value.toUpperCase())}
+          placeholder="Digite o ticker"
           className="border p-2 rounded w-full"
         />
-        <button onClick={addFII} className="bg-indigo-600 text-white px-4 rounded">
-          Add
-        </button>
+
+        {ticker && (
+          <div className="absolute bg-white border w-full z-10">
+            {FII_LIST
+              .filter(f=>f.includes(ticker))
+              .map((f,i)=>(
+                <div 
+                  key={i}
+                  onClick={()=>setTicker(f)}
+                  className="p-2 hover:bg-gray-100 cursor-pointer"
+                >
+                  {f}
+                </div>
+              ))
+            }
+          </div>
+        )}
       </div>
 
-      {/* STATUS */}
+      <button onClick={addFII} className="bg-indigo-600 text-white px-4 rounded mb-4">
+        Add
+      </button>
+
       {loading && <p className="text-sm text-gray-500">Carregando preços...</p>}
       {error && <p className="text-red-500">{error}</p>}
 
-      {/* KPIs */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
           Patrimônio: R$ {total.toFixed(2)}
@@ -118,7 +154,6 @@ export default function Page(){
         </div>
       </div>
 
-      {/* CARTEIRA */}
       <div className="bg-white p-4 rounded shadow mb-6">
         <h2 className="font-semibold mb-3">Carteira</h2>
 
@@ -153,7 +188,6 @@ export default function Page(){
         ))}
       </div>
 
-      {/* SUGESTÃO */}
       <div className="bg-white p-4 rounded shadow mb-6">
         <h2 className="font-semibold mb-3">Sugestões</h2>
 
@@ -167,7 +201,6 @@ export default function Page(){
         ))}
       </div>
 
-      {/* GRÁFICO */}
       <PieChart width={300} height={250}>
         <Pie data={chartData} dataKey="value">
           {chartData.map((_,i)=>(<Cell key={i} fill={COLORS[i%COLORS.length]} />))}
