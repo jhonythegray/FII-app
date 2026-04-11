@@ -11,7 +11,6 @@ const FII_LIST = [
   "RZAG11","VGIA11","RZTR11","SNAG11","FGAA11"
 ];
 
-// 📊 BASE PROFISSIONAL
 const FUNDAMENTALS = {
   "HGLG11.SA": { pvp: 0.95, dy: 0.085, sector: "Logística" },
   "XPLG11.SA": { pvp: 0.98, dy: 0.082, sector: "Logística" },
@@ -46,13 +45,12 @@ export default function Page(){
   const [ticker,setTicker]=useState("")
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState(null)
+  const [showDropdown,setShowDropdown]=useState(false)
 
-  // 💾 persistência
+  // persistência
   useEffect(()=>{
     const saved = localStorage.getItem("fii_app")
-    if(saved){
-      setPortfolio(JSON.parse(saved))
-    }
+    if(saved) setPortfolio(JSON.parse(saved))
   },[])
 
   useEffect(()=>{
@@ -63,6 +61,7 @@ export default function Page(){
     if(!ticker) return
     setPortfolio([...portfolio,{ticker:ticker.toUpperCase()+".SA",shares:1}])
     setTicker("")
+    setShowDropdown(false)
   }
 
   const removeFII = (i)=>{
@@ -98,13 +97,11 @@ export default function Page(){
   const enriched = portfolio.map(p=>{
     const price=prices[p.ticker]||0
     const fund = FUNDAMENTALS[p.ticker] || {pvp:1,dy:0.08,sector:"Outro"}
-
     return {...p,...fund,value:price*p.shares,price}
   })
 
   const total = enriched.reduce((a,b)=>a+b.value,0)
 
-  // 🧠 IA PROFISSIONAL
   const scored = enriched.map(f=>{
     let score = 0
 
@@ -145,25 +142,30 @@ export default function Page(){
 
       <h1 className="text-2xl font-bold mb-6">FII App PRO</h1>
 
-      {/* 🔎 AUTOCOMPLETE + BOTÃO CORRIGIDO */}
       <div className="mb-4">
-
         <div className="relative w-full">
           <input 
             value={ticker}
-            onChange={e=>setTicker(e.target.value.toUpperCase())}
+            onFocus={()=>setShowDropdown(true)}
+            onChange={e=>{
+              setTicker(e.target.value.toUpperCase())
+              setShowDropdown(true)
+            }}
             placeholder="Digite o ticker"
             className="border p-2 rounded w-full"
           />
 
-          {ticker && (
+          {showDropdown && ticker && (
             <div className="absolute bg-white border w-full z-50 max-h-40 overflow-y-auto">
               {FII_LIST
                 .filter(f=>f.includes(ticker))
                 .map((f,i)=>(
                   <div 
                     key={i}
-                    onClick={()=>setTicker(f)}
+                    onClick={()=>{
+                      setTicker(f)
+                      setShowDropdown(false)
+                    }}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
                   >
                     {f}
@@ -180,7 +182,6 @@ export default function Page(){
         >
           Adicionar FII
         </button>
-
       </div>
 
       {loading && <p className="text-sm text-gray-500">Carregando preços...</p>}
@@ -203,7 +204,6 @@ export default function Page(){
 
         {scored.map((f,i)=>(
           <div key={i} className="flex justify-between items-center py-2 border-b">
-
             <span>{f.ticker}</span>
 
             <input 
