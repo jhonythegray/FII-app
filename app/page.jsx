@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
 
 const COLORS = ["#6366f1","#22c55e","#f59e0b","#ef4444"];
@@ -47,7 +47,9 @@ export default function Page(){
   const [error,setError]=useState(null)
   const [showDropdown,setShowDropdown]=useState(false)
 
-  // persistência
+  const dropdownRef = useRef(null)
+
+  // 💾 persistência
   useEffect(()=>{
     const saved = localStorage.getItem("fii_app")
     if(saved) setPortfolio(JSON.parse(saved))
@@ -56,6 +58,18 @@ export default function Page(){
   useEffect(()=>{
     localStorage.setItem("fii_app", JSON.stringify(portfolio))
   },[portfolio])
+
+  // 🔥 fechar dropdown ao clicar fora
+  useEffect(()=>{
+    function handleClickOutside(event){
+      if(dropdownRef.current && !dropdownRef.current.contains(event.target)){
+        setShowDropdown(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return ()=>document.removeEventListener("mousedown", handleClickOutside)
+  },[])
 
   const addFII = ()=>{
     if(!ticker) return
@@ -143,7 +157,8 @@ export default function Page(){
       <h1 className="text-2xl font-bold mb-6">FII App PRO</h1>
 
       <div className="mb-4">
-        <div className="relative w-full">
+        <div ref={dropdownRef} className="relative w-full">
+
           <input 
             value={ticker}
             onFocus={()=>setShowDropdown(true)}
