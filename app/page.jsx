@@ -1,8 +1,5 @@
 'use client'
 import React, { useState, useEffect, useRef } from "react";
-import { PieChart, Pie, Cell, Tooltip } from "recharts";
-
-const COLORS = ["#6366f1","#22c55e","#f59e0b","#ef4444"];
 
 const FII_LIST = [
   "HGLG11","XPLG11","BTLG11","XPML11","KNRI11",
@@ -41,8 +38,8 @@ export default function Page(){
 
   const [portfolio,setPortfolio]=useState([])
   const [prices,setPrices]=useState({})
-  const [aporte,setAporte]=useState(1500)
   const [ticker,setTicker]=useState("")
+  const [aporte,setAporte]=useState(1500)
   const [loading,setLoading]=useState(false)
   const [showDropdown,setShowDropdown]=useState(false)
 
@@ -69,7 +66,7 @@ export default function Page(){
     return ()=>document.removeEventListener("mousedown", handler)
   },[])
 
-  // 🔥 FETCH CORRIGIDO
+  // FETCH PREÇO CORRETO
   const fetchPrices = async ()=>{
     if(portfolio.length === 0) return
 
@@ -82,30 +79,45 @@ export default function Page(){
       const data = await res.json()
 
       const map = {}
-      data.results?.forEach(r=>{
-        map[r.symbol + ".SA"] = r.regularMarketPrice || 0
-      })
+
+      if(data.results){
+        data.results.forEach(r=>{
+          if(r.regularMarketPrice){
+            map[r.symbol + ".SA"] = r.regularMarketPrice
+          }
+        })
+      }
 
       setPrices(map)
-    }catch{}
+
+    }catch(e){
+      console.error(e)
+    }
 
     setLoading(false)
   }
 
   useEffect(()=>{fetchPrices()},[portfolio])
 
+  // carteira enriquecida
   const enriched = portfolio.map(p=>{
-    const price = prices[p.ticker] || 0
-    return {...p,value:price*p.shares,price}
+    const price = prices[p.ticker]
+
+    return {
+      ...p,
+      price: price || null,
+      value: price ? price * p.shares : 0
+    }
   })
 
-  const total = enriched.reduce((a,b)=>a+b.value,0)
-
-  // 🔥 IA PROFISSIONAL (UNIVERSO COMPLETO)
+  // IA REAL (SEM BUG)
   const suggestion = Object.keys(FUNDAMENTALS)
     .map(ticker=>{
       const fund = FUNDAMENTALS[ticker]
-      const price = prices[ticker] || 100 // fallback seguro
+      const price = prices[ticker]
+
+      if(!price) return null
+
       const exists = portfolio.find(p=>p.ticker === ticker)
 
       let score = 0
@@ -115,14 +127,16 @@ export default function Page(){
       else score -= 2
 
       if(fund.dy >= 0.08 && fund.dy <= 0.12) score += 3
+      if(fund.dy > 0.12) score -= 1
 
       if(fund.sector === "Logística") score += 3
       if(fund.sector === "Shopping") score += 2
 
-      if(exists) score -= 3
+      if(exists) score -= 1
 
       return { ticker, price, score }
     })
+    .filter(Boolean)
     .sort((a,b)=>b.score-a.score)
     .slice(0,3)
     .map(f=>({
@@ -131,10 +145,11 @@ export default function Page(){
     }))
 
   return(
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
 
-      <h1 className="text-xl font-bold mb-4">FII PRO</h1>
+      <h1 className="text-xl font-bold mb-4">FII PRO (VERSÃO CORRETA)</h1>
 
+      {/* INPUT */}
       <div ref={ref} className="relative">
         <input
           value={ticker}
@@ -147,9 +162,11 @@ export default function Page(){
         />
 
         {showDropdown && ticker && (
-          <div className="absolute bg-white border w-full">
+          <div className="absolute bg-white border w-full z-50">
             {FII_LIST.filter(f=>f.includes(ticker)).map((f,i)=>(
-              <div key={i} onClick={()=>{setTicker(f);setShowDropdown(false)}} className="p-2 hover:bg-gray-100">
+              <div key={i}
+                onClick={()=>{setTicker(f);setShowDropdown(false)}}
+                className="p-2 hover:bg-gray-100 cursor-pointer">
                 {f}
               </div>
             ))}
@@ -157,23 +174,37 @@ export default function Page(){
         )}
       </div>
 
-      <button onClick={()=>setPortfolio([...portfolio,{ticker:ticker+".SA",shares:1}])}
-        className="bg-indigo-600 text-white w-full mt-2 p-2">
-        Add
+      {/* ADD */}
+      <button
+        onClick={()=>{
+          if(!ticker) return
+          setPortfolio([...portfolio,{ticker:ticker+".SA",shares:1}])
+          setTicker("")
+        }}
+        className="bg-indigo-600 text-white w-full mt-2 p-2"
+      >
+        Adicionar
       </button>
 
-      {loading && <p>Carregando preços...</p>}
+      {loading && <p className="mt-2">Carregando preços...</p>}
 
+      {/* CARTEIRA */}
       <div className="mt-4">
+        <h2 className="font-semibold">Carteira</h2>
         {enriched.map((f,i)=>(
-          <div key={i}>{f.ticker} - R$ {f.value.toFixed(2)}</div>
+          <div key={i}>
+            {f.ticker} → {f.price ? `R$ ${f.value.toFixed(2)}` : "sem preço"}
+          </div>
         ))}
       </div>
 
+      {/* SUGESTÃO */}
       <div className="mt-4">
-        <h2>Sugestões</h2>
+        <h2 className="font-semibold">Sugestões</h2>
         {suggestion.map((s,i)=>(
-          <div key={i}>{s.ticker} → {s.qty} cotas</div>
+          <div key={i}>
+            {s.ticker} → {s.qty} cotas
+          </div>
         ))}
       </div>
 
