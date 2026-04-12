@@ -1,0 +1,5 @@
+{
+  "HGLG11": { "dy": 0.085, "pvp": 0.95, "vacancia": 0.05 },
+  "XPML11": { "dy": 0.08, "pvp": 0.97, "vacancia": 0.04 },
+  "KNRI11": { "dy": 0.075, "pvp": 1.02, "vacancia": 0.05 }
+}
