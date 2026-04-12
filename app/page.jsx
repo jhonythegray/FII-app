@@ -1,5 +1,5 @@
 // ===============================
-// FII PRO APP - HEDGE FUND + IA VERSION
+// FII PRO APP - INSTITUTIONAL AI VERSION (GESTOR PROFISSIONAL)
 // ===============================
 
 'use client'
@@ -7,10 +7,24 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Tooltip, LineChart, Line, XAxis, YAxis } from 'recharts'
 
-const STORAGE = 'fii_pro_v2'
+const STORAGE = 'fii_pro_ultra'
 
 // ===============================
-// 🧠 IA ENGINE
+// 🔌 API
+// ===============================
+
+async function fetchPrice(ticker) {
+  try {
+    const res = await fetch(`https://brapi.dev/api/quote/${ticker}`)
+    const data = await res.json()
+    return data?.results?.[0]?.regularMarketPrice || 100
+  } catch {
+    return 100
+  }
+}
+
+// ===============================
+// 🧠 IA NÍVEL GESTOR
 // ===============================
 
 function scoreFII(f) {
@@ -23,23 +37,85 @@ function scoreFII(f) {
   return s
 }
 
-function explainFII(ticker, f) {
-  if (!f) return "Sem dados"
+function portfolioMetrics(portfolio, fundData) {
+  let dy = 0, pvp = 0, vac = 0
 
-  if (f.vacancia > 0.15) return `${ticker}: risco alto (vacância elevada)`
-  if (f.pvp > 1.1) return `${ticker}: sobrevalorizado`
-  if (f.dy > 0.09) return `${ticker}: excelente gerador de renda`
+  portfolio.forEach(f => {
+    const d = fundData[f.ticker] || {}
+    dy += d.dy || 0
+    pvp += d.pvp || 1
+    vac += d.vacancia || 0
+  })
 
-  return `${ticker}: ativo equilibrado`
+  const n = portfolio.length || 1
+
+  return {
+    dy: dy / n,
+    pvp: pvp / n,
+    vac: vac / n
+  }
+}
+
+function riskAnalysis(portfolio, fundData) {
+  let concentration = {}
+
+  portfolio.forEach(f => {
+    const seg = fundData[f.ticker]?.segmento || 'outros'
+    concentration[seg] = (concentration[seg] || 0) + 1
+  })
+
+  const max = Math.max(...Object.values(concentration), 0)
+  const total = portfolio.length || 1
+
+  return max / total
+}
+
+function generateReport(portfolio, fundData) {
+  if (!portfolio.length) return "Carteira vazia"
+
+  const metrics = portfolioMetrics(portfolio, fundData)
+  const risk = riskAnalysis(portfolio, fundData)
+
+  let report = ""
+
+  // DY
+  if (metrics.dy > 0.085) report += "Carteira com excelente geração de renda. "
+  else report += "Renda moderada, com espaço para otimização. "
+
+  // PVP
+  if (metrics.pvp > 1.05) report += "Ativos relativamente caros. "
+  else report += "Boa margem de segurança nos preços. "
+
+  // VACANCIA
+  if (metrics.vac > 0.12) report += "Risco elevado via vacância. "
+  else report += "Baixo risco operacional. "
+
+  // CONCENTRAÇÃO
+  if (risk > 0.5) report += "Alta concentração setorial, aumentando risco estrutural. "
+  else report += "Diversificação adequada. "
+
+  // FINAL
+  report += "Recomenda-se ajuste fino via rebalanceamento e alocação direcionada."
+
+  return report
+}
+
+function suggestAllocation(aporte, portfolio, fundData) {
+  const ranked = portfolio
+    .map(f => ({ ...f, score: scoreFII(fundData[f.ticker]) }))
+    .sort((a,b)=>b.score-a.score)
+
+  return ranked.map(f => ({
+    ticker: f.ticker,
+    value: (aporte / ranked.length).toFixed(0)
+  }))
 }
 
 function rebalance(portfolio, fundData) {
   return portfolio.map(f => {
     const score = scoreFII(fundData[f.ticker])
-
     if (score <= 4) return { ticker: f.ticker, action: 'REDUZIR' }
     if (score >= 7) return { ticker: f.ticker, action: 'AUMENTAR' }
-
     return { ticker: f.ticker, action: 'MANTER' }
   })
 }
@@ -57,7 +133,7 @@ function simulate(initial, monthly, rate, months = 120) {
 }
 
 // ===============================
-// 🚀 APP
+// APP
 // ===============================
 
 export default function App() {
@@ -80,21 +156,37 @@ export default function App() {
       .then(setFundData)
   }, [])
 
+  useEffect(() => {
+    async function updatePrices() {
+      if (!data.selected) return
+
+      const updated = await Promise.all(
+        (data.portfolios[data.selected] || []).map(async f => ({
+          ...f,
+          price: await fetchPrice(f.ticker)
+        }))
+      )
+
+      setData(prev => ({
+        ...prev,
+        portfolios: {
+          ...prev.portfolios,
+          [prev.selected]: updated
+        }
+      }))
+    }
+
+    updatePrices()
+  }, [data.selected])
+
   const portfolio = data.portfolios[data.selected] || []
 
   const total = portfolio.reduce((acc, f) => acc + f.price * f.shares, 0)
 
-  const score = portfolio.length
-    ? portfolio.reduce((acc, f) => acc + scoreFII(fundData[f.ticker]), 0) / portfolio.length
-    : 0
+  const metrics = portfolioMetrics(portfolio, fundData)
+  const report = generateReport(portfolio, fundData)
 
-  const dyMedio = portfolio.length
-    ? portfolio.reduce((acc, f) => acc + (fundData[f.ticker]?.dy || 0), 0) / portfolio.length
-    : 0
-
-  const rendaMensal = total * dyMedio / 12
-
-  const growth = simulate(total, aporte, dyMedio || 0.1)
+  const growth = simulate(total, aporte, metrics.dy || 0.1)
 
   const chartData = portfolio.map(f => ({
     name: f.ticker,
@@ -102,67 +194,22 @@ export default function App() {
   }))
 
   const rebalanceData = rebalance(portfolio, fundData)
-
-  function createPortfolio() {
-    const name = prompt('Nome da carteira')
-    if (!name) return
-
-    setData(prev => ({
-      ...prev,
-      portfolios: { ...prev.portfolios, [name]: [] },
-      selected: name
-    }))
-  }
-
-  function addFII() {
-    const ticker = prompt('Ticker')
-    if (!ticker) return
-
-    setData(prev => {
-      const list = prev.portfolios[prev.selected] || []
-      return {
-        ...prev,
-        portfolios: {
-          ...prev.portfolios,
-          [prev.selected]: [...list, { ticker, shares: 1, price: 100 }]
-        }
-      }
-    })
-  }
+  const suggestions = suggestAllocation(aporte, portfolio, fundData)
 
   return (
     <div className="flex">
 
-      {/* SIDEBAR */}
       <div className="w-64 min-h-screen bg-[#05070d] p-4 border-r border-gray-800">
         <h2 className="text-xl mb-6">FII PRO</h2>
-
-        <button onClick={createPortfolio} className="w-full mb-2 bg-blue-600 p-2 rounded">Nova Carteira</button>
-        <button onClick={addFII} className="w-full bg-green-600 p-2 rounded">Adicionar FII</button>
-
-        <select
-          value={data.selected || ''}
-          onChange={e => setData(prev => ({ ...prev, selected: e.target.value }))}
-          className="mt-4 w-full bg-gray-800 p-2"
-        >
-          <option value="">Selecionar</option>
-          {Object.keys(data.portfolios).map(p => (
-            <option key={p}>{p}</option>
-          ))}
-        </select>
       </div>
 
-      {/* MAIN */}
       <div className="flex-1 p-6">
 
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <Card title="Total" value={`R$ ${total.toFixed(0)}`} />
-          <Card title="Score" value={score.toFixed(2)} />
-          <Card title="DY Médio" value={(dyMedio*100).toFixed(2)+"%"} />
-          <Card title="Renda Mensal" value={`R$ ${rendaMensal.toFixed(0)}`} />
-        </div>
+        <Panel title="Relatório IA">
+          {report}
+        </Panel>
 
-        <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-2 gap-6 my-6">
 
           <Panel title="Alocação">
             <PieChart width={400} height={300}>
@@ -182,17 +229,15 @@ export default function App() {
 
         </div>
 
-        <Panel title="IA - Recomendações">
-          {portfolio.map(f => (
-            <div key={f.ticker} className="mb-2">
-              {explainFII(f.ticker, fundData[f.ticker])}
-            </div>
-          ))}
-        </Panel>
-
         <Panel title="Rebalanceamento">
           {rebalanceData.map(r => (
             <div key={r.ticker}>{r.ticker}: {r.action}</div>
+          ))}
+        </Panel>
+
+        <Panel title="Sugestão de Aporte">
+          {suggestions.map(s => (
+            <div key={s.ticker}>{s.ticker}: R$ {s.value}</div>
           ))}
         </Panel>
 
@@ -202,18 +247,9 @@ export default function App() {
   )
 }
 
-function Card({ title, value }) {
-  return (
-    <div className="bg-[#111827] p-4 rounded-2xl border border-gray-800 shadow-xl">
-      <div className="text-gray-400">{title}</div>
-      <div className="text-xl">{value}</div>
-    </div>
-  )
-}
-
 function Panel({ title, children }) {
   return (
-    <div className="bg-[#111827] p-4 rounded-2xl border border-gray-800 shadow-xl">
+    <div className="bg-[#111827] p-4 rounded-2xl border border-gray-800 shadow-xl mb-4">
       <h2 className="mb-4 text-lg">{title}</h2>
       {children}
     </div>
@@ -221,5 +257,5 @@ function Panel({ title, children }) {
 }
 
 // ===============================
-// FINAL - HEDGE FUND LEVEL UI + IA
+// IA NÍVEL GESTOR ENTREGUE
 // ===============================
