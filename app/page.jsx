@@ -1,58 +1,47 @@
 // ===============================
-// FII PRO APP - FULL VERSION
-// Ready for Vercel Deploy
+// FII PRO APP - HEDGE FUND + IA VERSION
 // ===============================
 
-// ---------- package.json ----------
-{
-  "name": "fii-pro",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "next": "14.2.15",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "recharts": "2.10.0",
-    "tailwindcss": "3.4.0"
-  }
-}
-
-// ---------- app/layout.jsx ----------
-import './globals.css'
-
-export const metadata = {
-  title: 'FII Pro',
-  description: 'Professional FII Portfolio Manager'
-}
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="pt-br">
-      <body className="bg-[#0b0f19] text-white">{children}</body>
-    </html>
-  )
-}
-
-// ---------- app/page.jsx ----------
 'use client'
 
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Tooltip, LineChart, Line, XAxis, YAxis } from 'recharts'
 
-const STORAGE = 'fii_pro_v1'
+const STORAGE = 'fii_pro_v2'
+
+// ===============================
+// 🧠 IA ENGINE
+// ===============================
 
 function scoreFII(f) {
+  if (!f) return 0
   let s = 0
   if (f.pvp < 1) s += 2
   if (f.dy > 0.08) s += 2
   if (f.vacancia < 0.1) s += 2
   if (f.qualidade >= 8) s += 2
   return s
+}
+
+function explainFII(ticker, f) {
+  if (!f) return "Sem dados"
+
+  if (f.vacancia > 0.15) return `${ticker}: risco alto (vacância elevada)`
+  if (f.pvp > 1.1) return `${ticker}: sobrevalorizado`
+  if (f.dy > 0.09) return `${ticker}: excelente gerador de renda`
+
+  return `${ticker}: ativo equilibrado`
+}
+
+function rebalance(portfolio, fundData) {
+  return portfolio.map(f => {
+    const score = scoreFII(fundData[f.ticker])
+
+    if (score <= 4) return { ticker: f.ticker, action: 'REDUZIR' }
+    if (score >= 7) return { ticker: f.ticker, action: 'AUMENTAR' }
+
+    return { ticker: f.ticker, action: 'MANTER' }
+  })
 }
 
 function simulate(initial, monthly, rate, months = 120) {
@@ -66,6 +55,10 @@ function simulate(initial, monthly, rate, months = 120) {
 
   return data
 }
+
+// ===============================
+// 🚀 APP
+// ===============================
 
 export default function App() {
   const [data, setData] = useState({ portfolios: {}, selected: null })
@@ -92,8 +85,23 @@ export default function App() {
   const total = portfolio.reduce((acc, f) => acc + f.price * f.shares, 0)
 
   const score = portfolio.length
-    ? portfolio.reduce((acc, f) => acc + scoreFII(fundData[f.ticker] || {}), 0) / portfolio.length
+    ? portfolio.reduce((acc, f) => acc + scoreFII(fundData[f.ticker]), 0) / portfolio.length
     : 0
+
+  const dyMedio = portfolio.length
+    ? portfolio.reduce((acc, f) => acc + (fundData[f.ticker]?.dy || 0), 0) / portfolio.length
+    : 0
+
+  const rendaMensal = total * dyMedio / 12
+
+  const growth = simulate(total, aporte, dyMedio || 0.1)
+
+  const chartData = portfolio.map(f => ({
+    name: f.ticker,
+    value: f.price * f.shares
+  }))
+
+  const rebalanceData = rebalance(portfolio, fundData)
 
   function createPortfolio() {
     const name = prompt('Nome da carteira')
@@ -122,62 +130,71 @@ export default function App() {
     })
   }
 
-  const chartData = portfolio.map(f => ({
-    name: f.ticker,
-    value: f.price * f.shares
-  }))
-
-  const growth = simulate(total, aporte, 0.1)
-
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="flex">
 
-      <h1 className="text-3xl mb-6">FII PRO</h1>
+      {/* SIDEBAR */}
+      <div className="w-64 min-h-screen bg-[#05070d] p-4 border-r border-gray-800">
+        <h2 className="text-xl mb-6">FII PRO</h2>
 
-      <div className="flex gap-4 mb-6">
-        <button onClick={createPortfolio} className="bg-blue-600 px-4 py-2 rounded">Nova Carteira</button>
-        <button onClick={addFII} className="bg-green-600 px-4 py-2 rounded">Adicionar FII</button>
-      </div>
+        <button onClick={createPortfolio} className="w-full mb-2 bg-blue-600 p-2 rounded">Nova Carteira</button>
+        <button onClick={addFII} className="w-full bg-green-600 p-2 rounded">Adicionar FII</button>
 
-      <div className="mb-6">
         <select
           value={data.selected || ''}
           onChange={e => setData(prev => ({ ...prev, selected: e.target.value }))}
-          className="bg-gray-800 p-2"
+          className="mt-4 w-full bg-gray-800 p-2"
         >
-          <option value="">Selecione</option>
+          <option value="">Selecionar</option>
           {Object.keys(data.portfolios).map(p => (
             <option key={p}>{p}</option>
           ))}
         </select>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <Card title="Total" value={`R$ ${total.toFixed(2)}`} />
-        <Card title="Score" value={score.toFixed(2)} />
-        <Card title="FIIs" value={portfolio.length} />
-        <Card title="Aporte" value={`R$ ${aporte}`} />
-      </div>
+      {/* MAIN */}
+      <div className="flex-1 p-6">
 
-      <div className="grid grid-cols-2 gap-6">
-
-        <div className="bg-[#111827] p-4 rounded">
-          <h2 className="mb-4">Distribuição</h2>
-          <PieChart width={400} height={300}>
-            <Pie data={chartData} dataKey="value" nameKey="name" />
-            <Tooltip />
-          </PieChart>
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <Card title="Total" value={`R$ ${total.toFixed(0)}`} />
+          <Card title="Score" value={score.toFixed(2)} />
+          <Card title="DY Médio" value={(dyMedio*100).toFixed(2)+"%"} />
+          <Card title="Renda Mensal" value={`R$ ${rendaMensal.toFixed(0)}`} />
         </div>
 
-        <div className="bg-[#111827] p-4 rounded">
-          <h2 className="mb-4">Projeção</h2>
-          <LineChart width={400} height={300} data={growth}>
-            <XAxis dataKey="month" />
-            <YAxis />
-            <Tooltip />
-            <Line dataKey="value" />
-          </LineChart>
+        <div className="grid grid-cols-2 gap-6 mb-6">
+
+          <Panel title="Alocação">
+            <PieChart width={400} height={300}>
+              <Pie data={chartData} dataKey="value" nameKey="name" />
+              <Tooltip />
+            </PieChart>
+          </Panel>
+
+          <Panel title="Projeção">
+            <LineChart width={400} height={300} data={growth}>
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Line dataKey="value" />
+            </LineChart>
+          </Panel>
+
         </div>
+
+        <Panel title="IA - Recomendações">
+          {portfolio.map(f => (
+            <div key={f.ticker} className="mb-2">
+              {explainFII(f.ticker, fundData[f.ticker])}
+            </div>
+          ))}
+        </Panel>
+
+        <Panel title="Rebalanceamento">
+          {rebalanceData.map(r => (
+            <div key={r.ticker}>{r.ticker}: {r.action}</div>
+          ))}
+        </Panel>
 
       </div>
 
@@ -187,19 +204,22 @@ export default function App() {
 
 function Card({ title, value }) {
   return (
-    <div className="bg-[#111827] p-4 rounded">
+    <div className="bg-[#111827] p-4 rounded-2xl border border-gray-800 shadow-xl">
       <div className="text-gray-400">{title}</div>
       <div className="text-xl">{value}</div>
     </div>
   )
 }
 
-// ---------- public/data/fii.json ----------
-{
-  "HGLG11": { "pvp": 0.95, "dy": 0.085, "vacancia": 0.05, "qualidade": 9 },
-  "XPLG11": { "pvp": 0.98, "dy": 0.082, "vacancia": 0.06, "qualidade": 8 }
+function Panel({ title, children }) {
+  return (
+    <div className="bg-[#111827] p-4 rounded-2xl border border-gray-800 shadow-xl">
+      <h2 className="mb-4 text-lg">{title}</h2>
+      {children}
+    </div>
+  )
 }
 
 // ===============================
-// READY ✅
+// FINAL - HEDGE FUND LEVEL UI + IA
 // ===============================
