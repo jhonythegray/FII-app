@@ -1,211 +1,166 @@
 'use client'
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
+import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 
-const FII_LIST = [
-  "HGLG11","XPLG11","BTLG11","XPML11","KNRI11",
-  "VISC11","HSML11","MALL11","GGRC11","BRCO11",
-  "HGBS11","HGRE11","PVBI11","VINO11","JSRE11",
-  "RZAG11","VGIA11","RZTR11","SNAG11","FGAA11"
+const COLORS = ["#6366f1","#22c55e","#f59e0b","#ef4444"];
+
+// base consistente
+const FUNDS = [
+  {ticker:"HGLG11", price:165, pvp:0.95, dy:0.085, sector:"Logística"},
+  {ticker:"XPLG11", price:120, pvp:0.98, dy:0.082, sector:"Logística"},
+  {ticker:"BTLG11", price:110, pvp:1.02, dy:0.09, sector:"Logística"},
+  {ticker:"XPML11", price:105, pvp:0.97, dy:0.075, sector:"Shopping"},
+  {ticker:"VISC11", price:98, pvp:0.92, dy:0.08, sector:"Shopping"},
+  {ticker:"KNRI11", price:155, pvp:1.05, dy:0.07, sector:"Lajes"},
+  {ticker:"HGRE11", price:130, pvp:0.93, dy:0.085, sector:"Lajes"},
+  {ticker:"RZAG11", price:95, pvp:0.99, dy:0.10, sector:"Agro"},
+  {ticker:"VGIA11", price:92, pvp:0.97, dy:0.11, sector:"Agro"},
 ];
-
-const FUNDAMENTALS = {
-  "HGLG11.SA": { pvp: 0.95, dy: 0.085, sector: "Logística" },
-  "XPLG11.SA": { pvp: 0.98, dy: 0.082, sector: "Logística" },
-  "BTLG11.SA": { pvp: 1.02, dy: 0.09, sector: "Logística" },
-  "GGRC11.SA": { pvp: 0.97, dy: 0.088, sector: "Logística" },
-  "BRCO11.SA": { pvp: 0.96, dy: 0.084, sector: "Logística" },
-
-  "XPML11.SA": { pvp: 0.97, dy: 0.075, sector: "Shopping" },
-  "VISC11.SA": { pvp: 0.92, dy: 0.08, sector: "Shopping" },
-  "MALL11.SA": { pvp: 0.91, dy: 0.083, sector: "Shopping" },
-  "HSML11.SA": { pvp: 0.94, dy: 0.082, sector: "Shopping" },
-  "HGBS11.SA": { pvp: 0.99, dy: 0.078, sector: "Shopping" },
-
-  "KNRI11.SA": { pvp: 1.05, dy: 0.07, sector: "Lajes" },
-  "HGRE11.SA": { pvp: 0.93, dy: 0.085, sector: "Lajes" },
-  "PVBI11.SA": { pvp: 0.9, dy: 0.082, sector: "Lajes" },
-  "VINO11.SA": { pvp: 0.88, dy: 0.087, sector: "Lajes" },
-  "JSRE11.SA": { pvp: 0.95, dy: 0.08, sector: "Lajes" },
-
-  "RZAG11.SA": { pvp: 0.99, dy: 0.1, sector: "Agro" },
-  "VGIA11.SA": { pvp: 0.97, dy: 0.11, sector: "Agro" },
-  "RZTR11.SA": { pvp: 1.01, dy: 0.095, sector: "Agro" },
-  "SNAG11.SA": { pvp: 0.98, dy: 0.105, sector: "Agro" },
-  "FGAA11.SA": { pvp: 1.0, dy: 0.102, sector: "Agro" }
-};
 
 export default function Page(){
 
   const [portfolio,setPortfolio]=useState([])
-  const [prices,setPrices]=useState({})
   const [ticker,setTicker]=useState("")
   const [aporte,setAporte]=useState(1500)
-  const [loading,setLoading]=useState(false)
-  const [showDropdown,setShowDropdown]=useState(false)
-
-  const ref = useRef(null)
 
   // persistência
   useEffect(()=>{
-    const saved = localStorage.getItem("fii_app")
+    const saved = localStorage.getItem("fii_pro")
     if(saved) setPortfolio(JSON.parse(saved))
   },[])
 
   useEffect(()=>{
-    localStorage.setItem("fii_app", JSON.stringify(portfolio))
+    localStorage.setItem("fii_pro", JSON.stringify(portfolio))
   },[portfolio])
 
-  // fechar dropdown
-  useEffect(()=>{
-    const handler = e=>{
-      if(ref.current && !ref.current.contains(e.target)){
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener("mousedown", handler)
-    return ()=>document.removeEventListener("mousedown", handler)
-  },[])
-
-  // FETCH PREÇO CORRETO
-  const fetchPrices = async ()=>{
-    if(portfolio.length === 0) return
-
-    setLoading(true)
-
-    try{
-      const tickers = portfolio.map(p=>p.ticker.replace(".SA","")).join(",")
-
-      const res = await fetch(`https://brapi.dev/api/quote/${tickers}`)
-      const data = await res.json()
-
-      const map = {}
-
-      if(data.results){
-        data.results.forEach(r=>{
-          if(r.regularMarketPrice){
-            map[r.symbol + ".SA"] = r.regularMarketPrice
-          }
-        })
-      }
-
-      setPrices(map)
-
-    }catch(e){
-      console.error(e)
-    }
-
-    setLoading(false)
+  const addFII = ()=>{
+    const fund = FUNDS.find(f=>f.ticker===ticker)
+    if(!fund) return
+    setPortfolio([...portfolio,{...fund,shares:1}])
+    setTicker("")
   }
 
-  useEffect(()=>{fetchPrices()},[portfolio])
+  const removeFII = (i)=>{
+    const updated=[...portfolio]
+    updated.splice(i,1)
+    setPortfolio(updated)
+  }
 
   // carteira enriquecida
-  const enriched = portfolio.map(p=>{
-    const price = prices[p.ticker]
+  const enriched = portfolio.map(f=>({
+    ...f,
+    value: f.price * f.shares
+  }))
 
-    return {
-      ...p,
-      price: price || null,
-      value: price ? price * p.shares : 0
-    }
+  const total = enriched.reduce((a,b)=>a+b.value,0)
+
+  // IA real (universo completo)
+  const ranked = FUNDS.map(f=>{
+    let score = 0
+
+    if(f.pvp < 1) score += 4
+    else if(f.pvp < 1.05) score += 2
+    else score -= 2
+
+    if(f.dy >= 0.08 && f.dy <= 0.12) score += 3
+    if(f.dy > 0.12) score -= 1
+
+    if(f.sector==="Logística") score+=3
+    if(f.sector==="Shopping") score+=2
+    if(f.sector==="Lajes") score+=1
+
+    const exists = portfolio.find(p=>p.ticker===f.ticker)
+    if(exists) score -= 1
+
+    return {...f,score}
   })
+  .sort((a,b)=>b.score-a.score)
 
-  // IA REAL (SEM BUG)
-  const suggestion = Object.keys(FUNDAMENTALS)
-    .map(ticker=>{
-      const fund = FUNDAMENTALS[ticker]
-      const price = prices[ticker]
+  const suggestion = ranked.slice(0,3).map(f=>({
+    ticker:f.ticker,
+    qty: Math.floor((aporte/3)/f.price),
+    score:f.score
+  }))
 
-      if(!price) return null
-
-      const exists = portfolio.find(p=>p.ticker === ticker)
-
-      let score = 0
-
-      if(fund.pvp < 1) score += 4
-      else if(fund.pvp < 1.05) score += 2
-      else score -= 2
-
-      if(fund.dy >= 0.08 && fund.dy <= 0.12) score += 3
-      if(fund.dy > 0.12) score -= 1
-
-      if(fund.sector === "Logística") score += 3
-      if(fund.sector === "Shopping") score += 2
-
-      if(exists) score -= 1
-
-      return { ticker, price, score }
-    })
-    .filter(Boolean)
-    .sort((a,b)=>b.score-a.score)
-    .slice(0,3)
-    .map(f=>({
-      ticker:f.ticker,
-      qty: Math.floor((aporte/3)/f.price)
-    }))
+  const chartData = enriched.map(f=>({
+    name:f.ticker,
+    value:f.value
+  }))
 
   return(
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
 
-      <h1 className="text-xl font-bold mb-4">FII PRO (VERSÃO CORRETA)</h1>
+      <h1 className="text-2xl font-bold mb-6">FII Analyzer PRO</h1>
 
       {/* INPUT */}
-      <div ref={ref} className="relative">
-        <input
+      <div className="flex gap-2 mb-6">
+        <select
           value={ticker}
-          onFocus={()=>setShowDropdown(true)}
-          onChange={e=>{
-            setTicker(e.target.value.toUpperCase())
-            setShowDropdown(true)
-          }}
+          onChange={e=>setTicker(e.target.value)}
           className="border p-2 w-full"
-        />
+        >
+          <option value="">Selecionar FII</option>
+          {FUNDS.map(f=>(
+            <option key={f.ticker}>{f.ticker}</option>
+          ))}
+        </select>
 
-        {showDropdown && ticker && (
-          <div className="absolute bg-white border w-full z-50">
-            {FII_LIST.filter(f=>f.includes(ticker)).map((f,i)=>(
-              <div key={i}
-                onClick={()=>{setTicker(f);setShowDropdown(false)}}
-                className="p-2 hover:bg-gray-100 cursor-pointer">
-                {f}
-              </div>
-            ))}
-          </div>
-        )}
+        <button onClick={addFII} className="bg-indigo-600 text-white px-4">
+          Add
+        </button>
       </div>
 
-      {/* ADD */}
-      <button
-        onClick={()=>{
-          if(!ticker) return
-          setPortfolio([...portfolio,{ticker:ticker+".SA",shares:1}])
-          setTicker("")
-        }}
-        className="bg-indigo-600 text-white w-full mt-2 p-2"
-      >
-        Adicionar
-      </button>
-
-      {loading && <p className="mt-2">Carregando preços...</p>}
+      {/* KPIs */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-gray-100 p-4 rounded">
+          Patrimônio: R$ {total.toFixed(2)}
+        </div>
+        <div className="bg-gray-100 p-4 rounded">
+          FIIs: {portfolio.length}
+        </div>
+        <div className="bg-gray-100 p-4 rounded">
+          <input type="number" value={aporte} onChange={e=>setAporte(Number(e.target.value))}/>
+        </div>
+      </div>
 
       {/* CARTEIRA */}
-      <div className="mt-4">
-        <h2 className="font-semibold">Carteira</h2>
+      <div className="bg-gray-100 p-4 rounded mb-6">
+        <h2 className="font-semibold mb-2">Carteira</h2>
         {enriched.map((f,i)=>(
-          <div key={i}>
-            {f.ticker} → {f.price ? `R$ ${f.value.toFixed(2)}` : "sem preço"}
+          <div key={i} className="flex justify-between">
+            <span>{f.ticker}</span>
+            <span>{f.shares}</span>
+            <span>R$ {f.value.toFixed(2)}</span>
+            <button onClick={()=>removeFII(i)}>X</button>
           </div>
         ))}
       </div>
 
-      {/* SUGESTÃO */}
-      <div className="mt-4">
-        <h2 className="font-semibold">Sugestões</h2>
+      {/* SUGESTÕES */}
+      <div className="bg-gray-100 p-4 rounded mb-6">
+        <h2 className="font-semibold mb-2">Melhores oportunidades</h2>
         {suggestion.map((s,i)=>(
           <div key={i}>
-            {s.ticker} → {s.qty} cotas
+            {s.ticker} → {s.qty} cotas (score {s.score})
           </div>
         ))}
+      </div>
+
+      {/* GRÁFICOS */}
+      <div className="grid grid-cols-2 gap-6">
+        <PieChart width={300} height={250}>
+          <Pie data={chartData} dataKey="value">
+            {chartData.map((_,i)=>(<Cell key={i} fill={COLORS[i%COLORS.length]} />))}
+          </Pie>
+          <Tooltip/>
+        </PieChart>
+
+        <BarChart width={300} height={250} data={ranked.slice(0,5)}>
+          <XAxis dataKey="ticker"/>
+          <YAxis/>
+          <Tooltip/>
+          <Bar dataKey="score"/>
+        </BarChart>
       </div>
 
     </div>
