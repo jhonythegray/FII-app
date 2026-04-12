@@ -8,6 +8,7 @@ const FUNDS = [
   {ticker:"XPML11", price:105, pvp:0.97, dy:0.075, sector:"Shopping"},
   {ticker:"VISC11", price:98, pvp:0.92, dy:0.08, sector:"Shopping"},
   {ticker:"KNRI11", price:155, pvp:1.05, dy:0.07, sector:"Lajes"},
+  {ticker:"HGRE11", price:130, pvp:0.93, dy:0.085, sector:"Lajes"},
 ];
 
 export default function Page(){
@@ -17,12 +18,12 @@ export default function Page(){
   const [aporte,setAporte]=useState(1500)
 
   useEffect(()=>{
-    const saved = localStorage.getItem("fii_app")
+    const saved = localStorage.getItem("fii_pro")
     if(saved) setPortfolio(JSON.parse(saved))
   },[])
 
   useEffect(()=>{
-    localStorage.setItem("fii_app", JSON.stringify(portfolio))
+    localStorage.setItem("fii_pro", JSON.stringify(portfolio))
   },[portfolio])
 
   const addFII = ()=>{
@@ -44,6 +45,12 @@ export default function Page(){
     setPortfolio(updated)
   }
 
+  const removeFII = (i)=>{
+    const updated=[...portfolio]
+    updated.splice(i,1)
+    setPortfolio(updated)
+  }
+
   const enriched = portfolio.map(f=>({
     ...f,
     value: f.price * f.shares
@@ -51,7 +58,7 @@ export default function Page(){
 
   const total = enriched.reduce((a,b)=>a+b.value,0)
 
-  // IA só roda se tiver carteira
+  // IA
   let suggestion = []
   if(portfolio.length > 0){
     suggestion = FUNDS.map(f=>{
@@ -78,70 +85,102 @@ export default function Page(){
   }
 
   return(
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[#0b0f19] text-white p-6">
 
-      <h1 className="text-2xl font-bold mb-6">FII Analyzer</h1>
+      <div className="max-w-7xl mx-auto">
 
-      {/* INPUT */}
-      <div className="flex gap-2 mb-6">
-        <select
-          value={ticker}
-          onChange={e=>setTicker(e.target.value)}
-          className="border p-2 w-full"
-        >
-          <option value="">Selecionar FII</option>
-          {FUNDS.map(f=>(
-            <option key={f.ticker}>{f.ticker}</option>
-          ))}
-        </select>
+        <h1 className="text-3xl font-bold mb-6">FII Dashboard</h1>
 
-        <button onClick={addFII} className="bg-indigo-600 text-white px-4">
-          Add
-        </button>
-      </div>
+        {/* ADD */}
+        <div className="bg-[#111827] p-4 rounded mb-6 flex gap-2">
+          <select
+            value={ticker}
+            onChange={e=>setTicker(e.target.value)}
+            className="bg-[#1f2937] p-2 w-full"
+          >
+            <option value="">Selecionar FII</option>
+            {FUNDS.map(f=>(
+              <option key={f.ticker}>{f.ticker}</option>
+            ))}
+          </select>
 
-      {/* CARTEIRA */}
-      <div className="mb-6">
-        <h2 className="font-semibold mb-2">Sua carteira</h2>
+          <button onClick={addFII} className="bg-indigo-600 px-4 rounded">
+            Add
+          </button>
+        </div>
 
-        {portfolio.map((f,i)=>(
-          <div key={i} className="flex gap-2 items-center mb-2">
-            <span className="w-20">{f.ticker}</span>
+        {/* KPIs */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-[#111827] p-4 rounded">
+            <p className="text-gray-400">Patrimônio</p>
+            <p className="text-xl font-bold">R$ {total.toFixed(2)}</p>
+          </div>
 
-            <button onClick={()=>updateShares(i,f.shares-1)}>-</button>
+          <div className="bg-[#111827] p-4 rounded">
+            <p className="text-gray-400">FIIs</p>
+            <p className="text-xl font-bold">{portfolio.length}</p>
+          </div>
 
+          <div className="bg-[#111827] p-4 rounded">
+            <p className="text-gray-400">Aporte</p>
             <input
               type="number"
-              value={f.shares}
-              onChange={e=>updateShares(i,e.target.value)}
-              className="w-16 border text-center"
+              value={aporte}
+              onChange={e=>setAporte(Number(e.target.value))}
+              className="bg-[#1f2937] w-full mt-1 p-1"
             />
-
-            <button onClick={()=>updateShares(i,f.shares+1)}>+</button>
-
-            <span>R$ {(f.shares*f.price).toFixed(2)}</span>
           </div>
-        ))}
-      </div>
-
-      {/* KPIs */}
-      <div className="mb-6">
-        <p><b>Total:</b> R$ {total.toFixed(2)}</p>
-      </div>
-
-      {/* IA */}
-      {portfolio.length > 0 && (
-        <div>
-          <h2 className="font-semibold mb-2">Sugestão de aporte</h2>
-
-          {suggestion.map((s,i)=>(
-            <div key={i}>
-              {s.ticker} → {s.qty} cotas
-            </div>
-          ))}
         </div>
-      )}
 
+        <div className="grid grid-cols-2 gap-6">
+
+          {/* CARTEIRA */}
+          <div className="bg-[#111827] p-4 rounded">
+            <h2 className="mb-3 font-semibold">Carteira</h2>
+
+            {portfolio.map((f,i)=>(
+              <div key={i} className="flex justify-between items-center mb-2">
+
+                <span>{f.ticker}</span>
+
+                <div className="flex items-center gap-1">
+                  <button onClick={()=>updateShares(i,f.shares-1)}>-</button>
+
+                  <input
+                    type="number"
+                    value={f.shares}
+                    onChange={e=>updateShares(i,e.target.value)}
+                    className="w-16 text-center bg-[#1f2937]"
+                  />
+
+                  <button onClick={()=>updateShares(i,f.shares+1)}>+</button>
+                </div>
+
+                <span>R$ {(f.price*f.shares).toFixed(2)}</span>
+
+                <button onClick={()=>removeFII(i)} className="text-red-400">x</button>
+              </div>
+            ))}
+          </div>
+
+          {/* SUGESTÃO */}
+          <div className="bg-[#111827] p-4 rounded">
+            <h2 className="mb-3 font-semibold">Sugestão de aporte</h2>
+
+            {portfolio.length === 0 && (
+              <p className="text-gray-400">Monte sua carteira primeiro</p>
+            )}
+
+            {suggestion.map((s,i)=>(
+              <div key={i} className="mb-2">
+                <b>{s.ticker}</b> → {s.qty} cotas
+              </div>
+            ))}
+          </div>
+
+        </div>
+
+      </div>
     </div>
   )
 }
