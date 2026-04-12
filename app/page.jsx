@@ -1,134 +1,205 @@
+// ===============================
+// FII PRO APP - FULL VERSION
+// Ready for Vercel Deploy
+// ===============================
+
+// ---------- package.json ----------
+{
+  "name": "fii-pro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.2.15",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "recharts": "2.10.0",
+    "tailwindcss": "3.4.0"
+  }
+}
+
+// ---------- app/layout.jsx ----------
+import './globals.css'
+
+export const metadata = {
+  title: 'FII Pro',
+  description: 'Professional FII Portfolio Manager'
+}
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="pt-br">
+      <body className="bg-[#0b0f19] text-white">{children}</body>
+    </html>
+  )
+}
+
+// ---------- app/page.jsx ----------
 'use client'
-import React, { useState, useEffect, useRef } from "react";
 
-const FUNDS = [
-  "HGLG11","XPLG11","BTLG11","XPML11","VISC11","MALL11",
-  "HSML11","HGBS11","KNRI11","HGRE11","PVBI11","VINO11",
-  "JSRE11","BRCR11","GGRC11","BRCO11","RZAG11","VGIA11",
-  "RZTR11","SNAG11","FGAA11"
-];
+import { useEffect, useState } from 'react'
+import { PieChart, Pie, Tooltip, LineChart, Line, XAxis, YAxis } from 'recharts'
 
-const FUND_DATA = {
-  HGLG11:{price:165,pvp:0.95,dy:0.085},
-  XPLG11:{price:120,pvp:0.98,dy:0.082},
-  BTLG11:{price:110,pvp:1.02,dy:0.09},
-  XPML11:{price:105,pvp:0.97,dy:0.075},
-  VISC11:{price:98,pvp:0.92,dy:0.08},
-};
+const STORAGE = 'fii_pro_v1'
 
-export default function Page(){
+function scoreFII(f) {
+  let s = 0
+  if (f.pvp < 1) s += 2
+  if (f.dy > 0.08) s += 2
+  if (f.vacancia < 0.1) s += 2
+  if (f.qualidade >= 8) s += 2
+  return s
+}
 
-  const [portfolio,setPortfolio]=useState([])
-  const [query,setQuery]=useState("")
-  const [show,setShow]=useState(false)
-  const [aporte,setAporte]=useState(1500)
+function simulate(initial, monthly, rate, months = 120) {
+  let val = initial
+  let data = []
 
-  const ref = useRef(null)
+  for (let i = 0; i < months; i++) {
+    val = (val + monthly) * (1 + rate / 12)
+    data.push({ month: i, value: val })
+  }
 
-  useEffect(()=>{
-    const saved = localStorage.getItem("fii_app")
-    if(saved) setPortfolio(JSON.parse(saved))
-  },[])
+  return data
+}
 
-  useEffect(()=>{
-    localStorage.setItem("fii_app", JSON.stringify(portfolio))
-  },[portfolio])
+export default function App() {
+  const [data, setData] = useState({ portfolios: {}, selected: null })
+  const [aporte, setAporte] = useState(1000)
+  const [fundData, setFundData] = useState({})
 
-  useEffect(()=>{
-    const handler = e=>{
-      if(ref.current && !ref.current.contains(e.target)){
-        setShow(false)
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE)
+    if (saved) setData(JSON.parse(saved))
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE, JSON.stringify(data))
+  }, [data])
+
+  useEffect(() => {
+    fetch('/data/fii.json')
+      .then(r => r.json())
+      .then(setFundData)
+  }, [])
+
+  const portfolio = data.portfolios[data.selected] || []
+
+  const total = portfolio.reduce((acc, f) => acc + f.price * f.shares, 0)
+
+  const score = portfolio.length
+    ? portfolio.reduce((acc, f) => acc + scoreFII(fundData[f.ticker] || {}), 0) / portfolio.length
+    : 0
+
+  function createPortfolio() {
+    const name = prompt('Nome da carteira')
+    if (!name) return
+
+    setData(prev => ({
+      ...prev,
+      portfolios: { ...prev.portfolios, [name]: [] },
+      selected: name
+    }))
+  }
+
+  function addFII() {
+    const ticker = prompt('Ticker')
+    if (!ticker) return
+
+    setData(prev => {
+      const list = prev.portfolios[prev.selected] || []
+      return {
+        ...prev,
+        portfolios: {
+          ...prev.portfolios,
+          [prev.selected]: [...list, { ticker, shares: 1, price: 100 }]
+        }
       }
-    }
-    document.addEventListener("mousedown", handler)
-    return ()=>document.removeEventListener("mousedown", handler)
-  },[])
-
-  const filtered = FUNDS.filter(f=>f.includes(query.toUpperCase()))
-
-  const addFII = (ticker)=>{
-    const base = FUND_DATA[ticker] || {price:100,pvp:1,dy:0.08}
-
-    setPortfolio(prev=>{
-      const exists = prev.find(p=>p.ticker===ticker)
-      if(exists) return prev
-      return [...prev,{ticker,...base,shares:1}]
     })
-
-    setQuery("")
-    setShow(false)
   }
 
-  const updateShares = (i,val)=>{
-    const updated=[...portfolio]
-    updated[i].shares = Math.max(0,Number(val))
-    setPortfolio(updated)
-  }
+  const chartData = portfolio.map(f => ({
+    name: f.ticker,
+    value: f.price * f.shares
+  }))
 
-  const total = portfolio.reduce((acc,f)=>acc+(f.price*f.shares),0)
+  const growth = simulate(total, aporte, 0.1)
 
-  return(
-    <div className="min-h-screen bg-[#0b0f19] text-white p-6">
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
 
-      <div className="max-w-6xl mx-auto">
+      <h1 className="text-3xl mb-6">FII PRO</h1>
 
-        <h1 className="text-3xl mb-6">FII Dashboard</h1>
+      <div className="flex gap-4 mb-6">
+        <button onClick={createPortfolio} className="bg-blue-600 px-4 py-2 rounded">Nova Carteira</button>
+        <button onClick={addFII} className="bg-green-600 px-4 py-2 rounded">Adicionar FII</button>
+      </div>
 
-        {/* SEARCH */}
-        <div ref={ref} className="mb-6 relative">
-
-          <input
-            value={query}
-            onFocus={()=>setShow(true)}
-            onChange={e=>{
-              setQuery(e.target.value.toUpperCase())
-              setShow(true)
-            }}
-            placeholder="Buscar FII..."
-            className="w-full p-3 bg-[#111827]"
-          />
-
-          {show && query && (
-            <div className="absolute bg-[#1f2937] w-full max-h-40 overflow-y-auto">
-              {filtered.map((f,i)=>(
-                <div key={i}
-                  onClick={()=>addFII(f)}
-                  className="p-2 hover:bg-gray-700 cursor-pointer">
-                  {f}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* CARTEIRA */}
-        <div className="bg-[#111827] p-4 rounded mb-6">
-          <h2 className="mb-3">Carteira</h2>
-
-          {portfolio.map((f,i)=>(
-            <div key={i} className="flex justify-between items-center mb-2">
-
-              <span>{f.ticker}</span>
-
-              <input
-                type="number"
-                value={f.shares}
-                onChange={e=>updateShares(i,e.target.value)}
-                className="w-20 bg-[#1f2937] text-center"
-              />
-
-              <span>R$ {(f.price*f.shares).toFixed(2)}</span>
-
-            </div>
+      <div className="mb-6">
+        <select
+          value={data.selected || ''}
+          onChange={e => setData(prev => ({ ...prev, selected: e.target.value }))}
+          className="bg-gray-800 p-2"
+        >
+          <option value="">Selecione</option>
+          {Object.keys(data.portfolios).map(p => (
+            <option key={p}>{p}</option>
           ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <Card title="Total" value={`R$ ${total.toFixed(2)}`} />
+        <Card title="Score" value={score.toFixed(2)} />
+        <Card title="FIIs" value={portfolio.length} />
+        <Card title="Aporte" value={`R$ ${aporte}`} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+
+        <div className="bg-[#111827] p-4 rounded">
+          <h2 className="mb-4">Distribuição</h2>
+          <PieChart width={400} height={300}>
+            <Pie data={chartData} dataKey="value" nameKey="name" />
+            <Tooltip />
+          </PieChart>
         </div>
 
-        {/* TOTAL */}
-        <div className="mb-6">
-          Total: R$ {total.toFixed(2)}
+        <div className="bg-[#111827] p-4 rounded">
+          <h2 className="mb-4">Projeção</h2>
+          <LineChart width={400} height={300} data={growth}>
+            <XAxis dataKey="month" />
+            <YAxis />
+            <Tooltip />
+            <Line dataKey="value" />
+          </LineChart>
         </div>
 
       </div>
+
     </div>
   )
 }
+
+function Card({ title, value }) {
+  return (
+    <div className="bg-[#111827] p-4 rounded">
+      <div className="text-gray-400">{title}</div>
+      <div className="text-xl">{value}</div>
+    </div>
+  )
+}
+
+// ---------- public/data/fii.json ----------
+{
+  "HGLG11": { "pvp": 0.95, "dy": 0.085, "vacancia": 0.05, "qualidade": 9 },
+  "XPLG11": { "pvp": 0.98, "dy": 0.082, "vacancia": 0.06, "qualidade": 8 }
+}
+
+// ===============================
+// READY ✅
+// ===============================
