@@ -6,6 +6,7 @@ import { PieChart, Pie, Tooltip, LineChart, Line, XAxis, YAxis, ResponsiveContai
 const STORAGE = 'fii_pro_ui'
 const DEFAULT_PORTFOLIO = 'Carteira Inicial'
 
+// API
 async function fetchPriceSafe(ticker) {
   try {
     const res = await fetch(`https://brapi.dev/api/quote/${ticker}`)
@@ -16,6 +17,7 @@ async function fetchPriceSafe(ticker) {
   }
 }
 
+// QUANT
 function buildMatrix(portfolio, fundData) {
   return portfolio.map(f => {
     const d = fundData[f.ticker] || {}
@@ -82,6 +84,7 @@ function monteCarlo(initial, monthly, returnRate, volatility, simulations=100) {
   return results.sort((a,b)=>a-b)
 }
 
+// STORE
 function useStore(){
   const [data,setData]=useState({ portfolios:{[DEFAULT_PORTFOLIO]:[]}, selected:DEFAULT_PORTFOLIO })
   const [ready,setReady]=useState(false)
@@ -99,6 +102,7 @@ function useStore(){
   return {data,setData,ready}
 }
 
+// APP
 export default function App(){
   const {data,setData,ready}=useStore()
   const [fundData,setFundData]=useState({})
@@ -114,8 +118,13 @@ export default function App(){
 
   useEffect(()=>{
     async function update(){
-      const updated = await Promise.all(portfolio.map(async f=>({...f,price:await fetchPriceSafe(f.ticker)})))
-      setData(prev=>({...prev,portfolios:{...prev.portfolios,[prev.selected]:updated}}))
+      const updated = await Promise.all(
+        portfolio.map(async f=>({...f,price:await fetchPriceSafe(f.ticker)}))
+      )
+      setData(prev=>({
+        ...prev,
+        portfolios:{...prev.portfolios,[prev.selected]:updated}
+      }))
     }
     if(portfolio.length) update()
   },[data.selected])
@@ -137,74 +146,124 @@ export default function App(){
   const opt = markowitzOptimization(portfolio,fundData)
 
   function addFII(){
-    if(!ticker) return
+    const t = ticker.trim().toUpperCase()
+
+    if(!t){
+      alert("Digite um ticker válido (ex: HGLG11)")
+      return
+    }
+
     setData(prev=>{
-      const list=prev.portfolios[prev.selected]
-      return {...prev,portfolios:{...prev.portfolios,[prev.selected]:[...list,{ticker,shares:1,price:100}]}}
+      const list = prev.portfolios[prev.selected] || []
+
+      if(list.find(f=>f.ticker===t)){
+        alert("Esse FII já existe")
+        return prev
+      }
+
+      return {
+        ...prev,
+        portfolios:{
+          ...prev.portfolios,
+          [prev.selected]:[
+            ...list,
+            { ticker: t, shares: 1, price: 100 }
+          ]
+        }
+      }
     })
+
     setTicker('')
     setModal(false)
   }
 
-  const sharpeColor = sharpe>1.5?"text-green-400":sharpe>1?"text-yellow-400":"text-red-400"
+  const sharpeColor =
+    sharpe>1.5 ? "text-green-400" :
+    sharpe>1 ? "text-yellow-400" :
+    "text-red-400"
 
   if(!ready) return <div className="p-6">Carregando...</div>
-
-  if(!portfolio.length) return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center">
-        <h1 className="text-2xl mb-4">Comece sua análise</h1>
-        <button onClick={()=>setModal(true)} className="bg-blue-600 px-6 py-3 rounded">Adicionar FII</button>
-      </div>
-    </div>
-  )
 
   return (
     <div className="flex min-h-screen bg-[#0b0f19] text-white">
 
+      {/* MODAL */}
       {modal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-[#111827] p-6 rounded-xl">
-            <input value={ticker} onChange={e=>setTicker(e.target.value)} className="bg-gray-800 p-2 mb-4" />
-            <button onClick={addFII} className="bg-green-600 px-4 py-2 rounded">Salvar</button>
+          <div className="bg-[#111827] p-6 rounded-xl w-80">
+            <input
+              value={ticker}
+              onChange={e=>setTicker(e.target.value)}
+              placeholder="Ex: HGLG11"
+              className="bg-gray-800 p-2 mb-4 w-full"
+            />
+            <button onClick={addFII} className="bg-green-600 px-4 py-2 rounded w-full">
+              Adicionar
+            </button>
           </div>
         </div>
       )}
 
-      <div className="w-64 p-4 border-r border-gray-800">
-        <button onClick={()=>setModal(true)} className="w-full bg-green-600 p-2 rounded">Adicionar FII</button>
-      </div>
-
-      <div className="flex-1 p-6">
-
-        <div className="grid grid-cols-5 gap-4 mb-6">
-          <Card title="Total" value={`R$ ${total.toFixed(0)}`} />
-          <Card title="Retorno" value={`${(ret*100).toFixed(2)}%`} />
-          <Card title="Risco" value={`${(risk*100).toFixed(2)}%`} />
-          <Card title="Sharpe" value={<span className={sharpeColor}>{sharpe.toFixed(2)}</span>} />
-          <Card title="Monte Carlo" value={`R$ ${p50?.toFixed(0)}`} />
+      {/* EMPTY STATE */}
+      {!portfolio.length ? (
+        <div className="flex items-center justify-center w-full h-screen">
+          <div className="text-center">
+            <h1 className="text-2xl mb-4">Comece sua análise</h1>
+            <button
+              onClick={()=>setModal(true)}
+              className="bg-blue-600 px-6 py-3 rounded"
+            >
+              Adicionar FII
+            </button>
+          </div>
         </div>
+      ) : (
+        <>
+          <div className="w-64 p-4 border-r border-gray-800">
+            <button
+              onClick={()=>setModal(true)}
+              className="w-full bg-green-600 p-2 rounded"
+            >
+              Adicionar FII
+            </button>
+          </div>
 
-        <Panel title="Cenários">
-          <div>Pessimista: R$ {p10?.toFixed(0)}</div>
-          <div>Base: R$ {p50?.toFixed(0)}</div>
-          <div>Otimista: R$ {p90?.toFixed(0)}</div>
-        </Panel>
+          <div className="flex-1 p-6">
 
-        <Panel title="Plano de Ação">
-          {opt.map(o=> <div key={o.ticker}>{o.ticker}: {(o.weight*100).toFixed(1)}%</div>)}
-        </Panel>
+            <div className="grid grid-cols-5 gap-4 mb-6">
+              <Card title="Total" value={`R$ ${total.toFixed(0)}`} />
+              <Card title="Retorno" value={`${(ret*100).toFixed(2)}%`} />
+              <Card title="Risco" value={`${(risk*100).toFixed(2)}%`} />
+              <Card title="Sharpe" value={<span className={sharpeColor}>{sharpe.toFixed(2)}</span>} />
+              <Card title="Monte Carlo" value={`R$ ${p50?.toFixed(0)}`} />
+            </div>
 
-        <Panel title="Alocação">
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={portfolio.map(f=>({name:f.ticker,value:f.price*f.shares}))} dataKey="value" />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </Panel>
+            <Panel title="Cenários">
+              <div>Pessimista: R$ {p10?.toFixed(0)}</div>
+              <div>Base: R$ {p50?.toFixed(0)}</div>
+              <div>Otimista: R$ {p90?.toFixed(0)}</div>
+            </Panel>
 
-      </div>
+            <Panel title="Plano de Ação">
+              {opt.map(o=> (
+                <div key={o.ticker}>
+                  Ajustar {o.ticker} para {(o.weight*100).toFixed(1)}%
+                </div>
+              ))}
+            </Panel>
+
+            <Panel title="Alocação">
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie data={portfolio.map(f=>({name:f.ticker,value:f.price*f.shares}))} dataKey="value" />
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </Panel>
+
+          </div>
+        </>
+      )}
 
     </div>
   )
