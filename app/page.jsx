@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 
-const STORAGE = 'fii_stable'
+const STORAGE = 'fii_real'
 
 const fiiList = ["HGLG11","XPML11","KNRI11","VISC11","XPLG11","BTLG11"]
 
@@ -18,69 +18,51 @@ async function fetchPriceSafe(ticker) {
 }
 
 // ===============================
-// 📊 CORE LÓGICO (SEM ALEATORIEDADE)
+// 📊 MODELO SIMPLES E CONFIÁVEL
 // ===============================
 
-function buildMatrix(portfolio, fundData) {
-  return portfolio.map(f => {
+function analyze(portfolio, fundData){
+  return portfolio.map(f=>{
     const d = fundData[f.ticker] || {}
+
+    const dy = d.dy || 0.08
+    const vac = d.vacancia || 0.1
+
     return {
       ticker: f.ticker,
-      retorno: d.dy || 0.08,
-      risco: d.vacancia || 0.1,
+      dy,
+      vac,
+      score: dy - vac,
       valor: f.price * f.shares
     }
   })
 }
 
-function expectedReturn(matrix){
-  if(!matrix.length) return 0
-  return matrix.reduce((a,f)=>a+f.retorno,0)/matrix.length
+function portfolioReturn(data){
+  if(!data.length) return 0
+
+  const total = data.reduce((a,f)=>a+f.valor,0)
+
+  return data.reduce((acc,f)=>{
+    const w = f.valor / total
+    return acc + (f.dy * w)
+  },0)
 }
 
-// alocação baseada em valor + qualidade
-function allocationModel(portfolio, fundData){
-  const matrix = buildMatrix(portfolio,fundData)
+function actionPlan(data){
+  if(!data.length) return []
 
-  const total = matrix.reduce((a,f)=>a+f.valor,0)
-
-  return matrix.map(f=>{
-    const weightAtual = f.valor / total
-    const score = f.retorno / (f.risco + 0.01)
-
-    return {
-      ticker: f.ticker,
-      atual: weightAtual,
-      ideal: score
-    }
-  })
-}
-
-// plano coerente
-function actionPlan(portfolio, fundData){
-  const data = allocationModel(portfolio,fundData)
+  const avg = data.reduce((a,f)=>a+f.score,0)/data.length
 
   return data.map(f=>{
-    if(f.atual > f.ideal + 0.05)
-      return `Reduzir ${f.ticker}`
-
-    if(f.atual < f.ideal - 0.05)
+    if(f.score > avg + 0.01)
       return `Aumentar ${f.ticker}`
+
+    if(f.score < avg - 0.01)
+      return `Reduzir ${f.ticker}`
 
     return `${f.ticker} equilibrado`
   })
-}
-
-// projeção determinística
-function projection(total, monthly, rate, months=120){
-  let val = total
-  const monthlyRate = rate / 12
-
-  for(let i=0;i<months;i++){
-    val = (val + monthly) * (1 + monthlyRate)
-  }
-
-  return val
 }
 
 // ===============================
@@ -88,18 +70,18 @@ function projection(total, monthly, rate, months=120){
 // ===============================
 
 function useStore(){
-  const [data,setData]=useState({ portfolio:[] })
+  const [portfolio,setPortfolio]=useState([])
 
   useEffect(()=>{
     const saved=localStorage.getItem(STORAGE)
-    if(saved) setData(JSON.parse(saved))
+    if(saved) setPortfolio(JSON.parse(saved))
   },[])
 
   useEffect(()=>{
-    localStorage.setItem(STORAGE,JSON.stringify(data))
-  },[data])
+    localStorage.setItem(STORAGE,JSON.stringify(portfolio))
+  },[portfolio])
 
-  return {data,setData}
+  return {portfolio,setPortfolio}
 }
 
 // ===============================
@@ -108,13 +90,10 @@ function useStore(){
 
 export default function App(){
 
-  const {data,setData}=useStore()
+  const {portfolio,setPortfolio}=useStore()
 
   const [fundData,setFundData]=useState({})
   const [ticker,setTicker]=useState('')
-  const [aporte,setAporte]=useState(1000)
-
-  const portfolio = data.portfolio
 
   useEffect(()=>{
     fetch('/data/fii.json')
@@ -127,20 +106,18 @@ export default function App(){
       const updated = await Promise.all(
         portfolio.map(async f=>({...f,price:await fetchPriceSafe(f.ticker)}))
       )
-      setData({ portfolio: updated })
+      setPortfolio(updated)
     }
 
     if(portfolio.length) update()
   },[])
 
-  const matrix = buildMatrix(portfolio,fundData)
-  const ret = expectedReturn(matrix)
+  const data = analyze(portfolio,fundData)
 
-  const total = portfolio.reduce((a,f)=>a+f.price*f.shares,0)
+  const total = data.reduce((a,f)=>a+f.valor,0)
+  const ret = portfolioReturn(data)
 
-  const proj = projection(total, aporte, ret)
-
-  const plan = actionPlan(portfolio,fundData)
+  const plan = actionPlan(data)
 
   function addFII(){
     const t = ticker.trim().toUpperCase()
@@ -148,23 +125,24 @@ export default function App(){
 
     if(portfolio.find(f=>f.ticker===t)) return
 
-    setData({
-      portfolio:[
-        ...portfolio,
-        { ticker:t, shares:1, price:100 }
-      ]
-    })
+    setPortfolio([
+      ...portfolio,
+      { ticker:t, shares:1, price:100 }
+    ])
 
     setTicker('')
   }
 
   function updateShares(i,val){
-    const v = Number(val)
-
     const list=[...portfolio]
-    list[i].shares=v
+    list[i].shares = Number(val)
+    setPortfolio(list)
+  }
 
-    setData({ portfolio:list })
+  function removeFII(i){
+    const list=[...portfolio]
+    list.splice(i,1)
+    setPortfolio(list)
   }
 
   return (
@@ -206,6 +184,10 @@ export default function App(){
 
               <span>R$ {(f.price*f.shares).toFixed(0)}</span>
 
+              <button onClick={()=>removeFII(i)} className="text-red-400">
+                x
+              </button>
+
             </div>
           ))}
         </div>
@@ -215,22 +197,21 @@ export default function App(){
       {/* MAIN */}
       <div className="flex-1 p-6">
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 gap-4 mb-6">
 
-          <Card title="Total" value={`R$ ${total.toFixed(0)}`} />
-          <Card title="Retorno esperado" value={`${(ret*100).toFixed(2)}%`} />
-          <Card title="Projeção 10 anos" value={`R$ ${proj.toFixed(0)}`} />
+          <Card title="Total investido" value={`R$ ${total.toFixed(0)}`} />
+          <Card title="Retorno estimado" value={`${(ret*100).toFixed(2)}% ao ano`} />
 
         </div>
 
-        <Panel title="Plano do gestor">
+        <Panel title="Análise do gestor">
           {plan.map((p,i)=> <div key={i}>{p}</div>)}
         </Panel>
 
         <Panel title="Alocação">
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie data={portfolio.map(f=>({name:f.ticker,value:f.price*f.shares}))} dataKey="value" />
+              <Pie data={data.map(f=>({name:f.ticker,value:f.valor}))} dataKey="value" />
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
